@@ -9,6 +9,7 @@ from torchvision import transforms
 
 from dataset import ConveyorSimulator
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
+from models.classification_network import AlexNet
 from visualizer import Visualizer
 
 TRAIN_VALIDATION_SPLIT = 0.9
@@ -44,8 +45,7 @@ class ConveyorCnnTrainer():
 
     def _create_model(self, task):
         if task == 'classification':
-            # À compléter
-            raise NotImplementedError()
+            return AlexNet(input_channels=1, nb_classes=3)
         elif task == 'detection':
             # À compléter
             raise NotImplementedError()
@@ -57,8 +57,7 @@ class ConveyorCnnTrainer():
 
     def _create_criterion(self, task):
         if task == 'classification':
-            # À compléter
-            raise NotImplementedError()
+            return torch.nn.BCELoss()
         elif task == 'detection':
             # À compléter
             raise NotImplementedError()
@@ -248,7 +247,21 @@ class ConveyorCnnTrainer():
         """
 
         # À compléter
-        raise NotImplementedError()
+        if task == 'classification':
+            optimizer.zero_grad()
+            output = model(image)
+            metric.accumulate(output, class_labels)
+            loss = criterion(output, class_labels)
+            loss.backward()
+            optimizer.step()
+            return loss
+            #return metric.get_value()
+        elif task == 'detection':
+            raise NotImplementedError()
+        elif task == 'segmentation':
+            raise NotImplementedError()
+
+
 
     def _test_batch(self, task, model, criterion, metric, image, segmentation_target, boxes, class_labels):
         """
@@ -289,7 +302,14 @@ class ConveyorCnnTrainer():
         """
 
         # À compléter
-        raise NotImplementedError()
+        if task == 'classification':
+            output = model(image)
+            metric.accumulate(output, class_labels)
+            return criterion(output, class_labels)
+        elif task == 'detection':
+            raise NotImplementedError()
+        elif task == 'segmentation':
+            raise NotImplementedError()
 
 
 if __name__ == '__main__':
