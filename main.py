@@ -7,10 +7,11 @@ import torch
 import torch.optim as optim
 from torchvision import transforms
 
-from APP2_S8.models.detection_network import YOLO
+from models.detection_network import YOLO
 from dataset import ConveyorSimulator
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
 from models.classification_network import AlexNet
+from models.segmentation_network import UNet
 from visualizer import Visualizer
 
 TRAIN_VALIDATION_SPLIT = 0.9
@@ -50,8 +51,7 @@ class ConveyorCnnTrainer():
         elif task == 'detection':
             return YOLO(input_channels=1)
         elif task == 'segmentation':
-            # À compléter
-            raise NotImplementedError()
+            return UNet(input_channels=1, nb_classes=3)
         else:
             raise ValueError('Not supported task')
 
@@ -61,7 +61,7 @@ class ConveyorCnnTrainer():
         elif task == 'detection':
             return torch.nn.BCELoss(), torch.nn.MSELoss()
         elif task == 'segmentation':
-            # À compléter
+            return torch.nn.CrossEntropyLoss()
             raise NotImplementedError()
         else:
             raise ValueError('Not supported task')
@@ -254,6 +254,7 @@ class ConveyorCnnTrainer():
             loss.backward()
             optimizer.step()
             return loss
+
         elif task == 'detection':
             optimizer.zero_grad()
             output = model(image)
@@ -278,7 +279,13 @@ class ConveyorCnnTrainer():
 
             raise NotImplementedError()
         elif task == 'segmentation':
-            raise NotImplementedError()
+            optimizer.zero_grad()
+            output = model(image)
+            metric.accumulate(output, segmentation_target)
+            loss = criterion(output, segmentation_target)
+            loss.backward()
+            optimizer.step()
+            return loss
 
 
 

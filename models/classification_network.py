@@ -19,6 +19,7 @@ class AlexNet(nn.Module):
         self.linear3 = nn.Linear(in_features=10, out_features=nb_classes)
         self.sigmoid = nn.Sigmoid()
 
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.ReLU(x)
