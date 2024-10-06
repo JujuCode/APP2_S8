@@ -61,8 +61,7 @@ class ConveyorCnnTrainer():
         elif task == 'detection':
             return torch.nn.BCELoss(), torch.nn.MSELoss()
         elif task == 'segmentation':
-            return torch.nn.CrossEntropyLoss()
-            raise NotImplementedError()
+            return torch.nn.BCELoss()
         else:
             raise ValueError('Not supported task')
 
@@ -278,11 +277,18 @@ class ConveyorCnnTrainer():
 
 
             raise NotImplementedError()
+
         elif task == 'segmentation':
             optimizer.zero_grad()
             output = model(image)
+
+            # Ajoute une dimension à segmentation target pour matcher le output: [32,1,53,53]
+            binary_target = torch.zeros(output.shape)
+            for c in range(4):
+                binary_target[:, c, :, :] = (segmentation_target == c).float()
+
             metric.accumulate(output, segmentation_target)
-            loss = criterion(output, segmentation_target)
+            loss = criterion(output, binary_target)
             loss.backward()
             optimizer.step()
             return loss
@@ -335,7 +341,15 @@ class ConveyorCnnTrainer():
         elif task == 'detection':
             raise NotImplementedError()
         elif task == 'segmentation':
-            raise NotImplementedError()
+            output = model(image)
+
+            binary_target = torch.zeros(output.shape)
+            for c in range(4):
+                binary_target[:, c, :, :] = (segmentation_target == c).float()
+
+            metric.accumulate(output, segmentation_target)
+            return criterion(output, binary_target)
+
 
 
 if __name__ == '__main__':
