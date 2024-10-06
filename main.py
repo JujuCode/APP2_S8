@@ -7,6 +7,7 @@ import torch
 import torch.optim as optim
 from torchvision import transforms
 
+from APP2_S8.models.detection_network import YOLO
 from dataset import ConveyorSimulator
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
 from models.classification_network import AlexNet
@@ -47,8 +48,7 @@ class ConveyorCnnTrainer():
         if task == 'classification':
             return AlexNet(input_channels=1, nb_classes=3)
         elif task == 'detection':
-            # À compléter
-            raise NotImplementedError()
+            return YOLO(input_channels=1)
         elif task == 'segmentation':
             # À compléter
             raise NotImplementedError()
@@ -59,8 +59,7 @@ class ConveyorCnnTrainer():
         if task == 'classification':
             return torch.nn.BCELoss()
         elif task == 'detection':
-            # À compléter
-            raise NotImplementedError()
+            return torch.nn.BCELoss(), torch.nn.MSELoss()
         elif task == 'segmentation':
             # À compléter
             raise NotImplementedError()
@@ -255,8 +254,28 @@ class ConveyorCnnTrainer():
             loss.backward()
             optimizer.step()
             return loss
-            #return metric.get_value()
         elif task == 'detection':
+            optimizer.zero_grad()
+            output = model(image)
+
+            # Séparer les données de output à des fins de calcul du coût
+            pred_x = output[:, 0::6, :, :]
+            pred_y = output[:, 1::6, :, :]
+            pred_w = output[:, 2::6, :, :]
+            pred_h = output[:, 3::6, :, :]
+            pred_conf = output[:, 4::6, :, :]
+            pred_class = output[:, 5::6, :, :]
+
+            # Séparer les targets
+
+
+            sqrt_wh = torch.sqrt(output[:, 2:3, :, :])
+
+            # Lxywh = criterion[1](output[:, 1:2, :, :]
+
+            # metric.accumulate()
+
+
             raise NotImplementedError()
         elif task == 'segmentation':
             raise NotImplementedError()

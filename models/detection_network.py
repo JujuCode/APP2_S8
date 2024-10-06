@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class YOLO(nn.Module):
-    def __init__(self, input_channels, nb_classes):
+    def __init__(self, input_channels):
         super(YOLO, self).__init__()
 
         # Fonction ReLU
@@ -31,6 +31,7 @@ class YOLO(nn.Module):
 
         self.sigmoid = nn.Sigmoid()
 
+
     def forward(self, x):
 
         # Conv 1
@@ -58,7 +59,9 @@ class YOLO(nn.Module):
         x = self.conv6(x)
 
         # Reshape
-        x = torch.reshape(x, (18, 7, 7))
+        x = torch.reshape(x, (32, 18, 7, 7))
 
         # Sigmoid
         x = self.sigmoid(x)
+
+        return x
