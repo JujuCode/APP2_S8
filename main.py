@@ -62,6 +62,7 @@ class ConveyorCnnTrainer():
             return torch.nn.BCELoss(), torch.nn.MSELoss()
         elif task == 'segmentation':
             return torch.nn.BCELoss()
+
         else:
             raise ValueError('Not supported task')
 
