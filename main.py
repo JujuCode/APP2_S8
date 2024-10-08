@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 from torchvision import transforms
 
-from models.detection_network import YOLO
+from models.detection_network import RCNN
 from dataset import ConveyorSimulator
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
 from models.classification_network import AlexNet
@@ -49,7 +49,7 @@ class ConveyorCnnTrainer():
         if task == 'classification':
             return AlexNet(input_channels=1, nb_classes=3)
         elif task == 'detection':
-            return YOLO(input_channels=1)
+            return RCNN(input_channels=1)
         elif task == 'segmentation':
             return UNet(input_channels=1, nb_classes=3)
         else:
@@ -255,28 +255,49 @@ class ConveyorCnnTrainer():
             return loss
 
         elif task == 'detection':
+            N, M, _ = boxes.shape
+
             optimizer.zero_grad()
             output = model(image)
 
-            # Séparer les données de output à des fins de calcul du coût
-            pred_x = output[:, 0::6, :, :]
-            pred_y = output[:, 1::6, :, :]
-            pred_w = output[:, 2::6, :, :]
-            pred_h = output[:, 3::6, :, :]
-            pred_conf = output[:, 4::6, :, :]
-            pred_class = output[:, 5::6, :, :]
-
-            # Séparer les targets
+            metric.accumulate(output, boxes)
 
 
-            sqrt_wh = torch.sqrt(output[:, 2:3, :, :])
+            # Séparer le output
+            pred_conf = output[..., 0].unsqueeze(-1)
+            pred_boxes = output[..., 1:4]
+            pred_class = output[..., 4:]
 
-            # Lxywh = criterion[1](output[:, 1:2, :, :]
+            # Séparer le target
+            target_boxes = boxes[..., 1:4]
+            target_mask_obj = boxes[..., 0] == 1
+            target_boxes = target_boxes * target_mask_obj.unsqueeze(-1).float()
 
-            # metric.accumulate()
+            mask_obj = boxes[..., 0] # Shape N, 3
 
+            # Fonction de coût pour les boxes (MSE)
+            Lbox = criterion[1](pred_boxes * mask_obj.unsqueeze(-1), target_boxes)
 
-            raise NotImplementedError()
+            # # Séparer les targets class et confiance
+            # target_class = torch.zeros((N, M, 3))
+            # target_conf = torch.zeros((N, M))  # Confiance
+            #
+            # for i in range(N):
+            #     for j in range(M):
+            #         if mask_obj[i, j]:  # Si un objet est présent
+            #             target_conf[i, j] = 1  # Confiance à 1
+            #             class_index = int(boxes[i, j, 4])  # Récupérer l'indice de classe
+            #             target_class[i, j, class_index] = 1  # Encodage onehot de la classe
+            #
+            # Lconf = criterion[0](pred_conf, target_conf.unsqueeze((-1)))
+            # Lclass = criterion[0](pred_class, target_class)
+            #
+            # L_total = Lbox + Lconf + Lclass
+            Lbox.backward()
+            optimizer.step()
+
+            return Lbox
+
 
         elif task == 'segmentation':
             optimizer.zero_grad()
@@ -339,7 +360,44 @@ class ConveyorCnnTrainer():
             metric.accumulate(output, class_labels)
             return criterion(output, class_labels)
         elif task == 'detection':
-            raise NotImplementedError()
+            N, M, _ = boxes.shape
+
+            output = model(image)
+
+            metric.accumulate(output, boxes)
+
+            # Séparer le output
+            pred_conf = output[..., 0].unsqueeze(-1)
+            pred_boxes = output[..., 1:4]
+            pred_class = output[..., 4:]
+
+            # Séparer le target
+            target_boxes = boxes[..., 1:4]
+            target_mask_obj = boxes[..., 0] == 1
+            target_boxes = target_boxes * target_mask_obj.unsqueeze(-1).float()
+
+            mask_obj = boxes[..., 0]  # Shape N, 3
+
+            # Fonction de coût pour les boxes (MSE)
+            Lbox = criterion[1](pred_boxes * mask_obj.unsqueeze(-1), target_boxes)
+
+            # # Séparer les targets class et confiance
+            target_class = torch.zeros((N, M, 3))
+            # target_conf = torch.zeros((N, M))  # Confiance
+            #
+            # for i in range(N):
+            #     for j in range(M):
+            #         if mask_obj[i, j]:  # Si un objet est présent
+            #             target_conf[i, j] = 1  # Confiance à 1
+            #             class_index = int(boxes[i, j, 4])  # Récupérer l'indice de classe
+            #             target_class[i, j, class_index] = 1  # Encodage onehot de la classe
+            #
+            # Lconf = criterion[0](pred_conf, target_conf.unsqueeze((-1)))
+            # Lclass = criterion[0](pred_class, target_class)
+
+            # L_total = Lbox + Lconf + Lclass
+            return Lbox
+
         elif task == 'segmentation':
             output = model(image)
 
@@ -358,8 +416,8 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['train', 'test'], help='The script mode', required=True)
     parser.add_argument('--task', choices=['classification', 'detection', 'segmentation'],
                         help='The CNN task', required=True)
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training and testing (default: 32)')
-    parser.add_argument('--epochs', type=int, default=20, help='number of epochs for training (default: 20)')
+    parser.add_argument('--batch_size', type=int, default=60, help='Batch size for training and testing (default: 32)')
+    parser.add_argument('--epochs', type=int, default=60, help='number of epochs for training (default: 20)')
     parser.add_argument('--lr', type=float, default=4e-4, help='learning rate used for training (default: 4e-4)')
     parser.add_argument('--use_gpu', action='store_true', help='use the gpu instead of the cpu')
     parser.add_argument('--early_stop', type=int, default=25,
