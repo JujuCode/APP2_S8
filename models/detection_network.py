@@ -74,26 +74,26 @@ class RCNN(nn.Module):
         self.relu = nn.ReLU()
 
         # Séquence RCNN
-        self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=16, kernel_size=3, padding=1, stride=1)
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, padding=1, stride=1)
+        self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=16, kernel_size=5, padding=1, stride=1)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1, stride=1)
         self.maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
-        self.conv3 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1, stride=1)
-        self.conv4 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding=1, stride=1)
-        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1, stride=1)
+        self.conv4 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1, stride=1)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2, stride=3, padding=0)
         self.flatten = nn.Flatten()
 
-        self.linear1 = nn.Linear(in_features=5408, out_features=70)
-        self.linear2 = nn.Linear(in_features=70, out_features=32)
-        self.linear3 = nn.Linear(in_features=32, out_features=21)
+        self.linear1 = nn.Linear(in_features=4096, out_features=80)
+        self.linear2 = nn.Linear(in_features=80, out_features=64)
+        self.linear3 = nn.Linear(in_features=64, out_features=21)
 
         # Fonction softmax
         self.sigmoid = nn.Sigmoid()
-
+        self.dropout = nn.Dropout(0.5)
         # Fonction batch norm
         self.batchnorm1 = nn.BatchNorm2d(num_features=16)
-        self.batchnorm2 = nn.BatchNorm2d(num_features=16)
-        self.batchnorm3 = nn.BatchNorm2d(num_features=32)
-        self.batchnorm4 = nn.BatchNorm2d(num_features=32)
+        self.batchnorm2 = nn.BatchNorm2d(num_features=32)
+        self.batchnorm3 = nn.BatchNorm2d(num_features=64)
+        self.batchnorm4 = nn.BatchNorm2d(num_features=64)
 
     def forward(self, x):
 
@@ -130,6 +130,7 @@ class RCNN(nn.Module):
         # Linear 1
         x = self.linear1(x)
         x = self.relu(x)
+        # x = self.dropout(x)
 
         # Linear 2
         x = self.linear2(x)
@@ -137,7 +138,7 @@ class RCNN(nn.Module):
 
         # Linear 3
         x = self.linear3(x)
-        x = self.relu(x)
+        # x = self.relu(x)
 
         x = self.sigmoid(x)
 
