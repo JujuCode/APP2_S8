@@ -51,6 +51,7 @@ class ConveyorCnnTrainer():
         elif task == 'detection':
             return RCNN(input_channels=1)
         elif task == 'segmentation':
+            return UNet(input_channels=1, nb_classes=4)
         else:
             raise ValueError('Not supported task')
 
@@ -399,7 +400,11 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['train', 'test'], help='The script mode', required=True)
     parser.add_argument('--task', choices=['classification', 'detection', 'segmentation'],
                         help='The CNN task', required=True)
+<<<<<<< Updated upstream
     parser.add_argument('--batch_size', type=int, default=68, help='Batch size for training and testing (default: 32)')
+=======
+    parser.add_argument('--batch_size', type=int, default=33, help='Batch size for training and testing (default: 32)')
+>>>>>>> Stashed changes
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs for training (default: 20)')
     parser.add_argument('--lr', type=float, default=5e-4, help='learning rate used for training (default: 4e-4)')
     parser.add_argument('--use_gpu', action='store_true', help='use the gpu instead of the cpu')
