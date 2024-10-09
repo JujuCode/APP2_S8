@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 from torchvision import transforms
 
-from models.detection_network import YOLO
+from models.detection_network import RCNN
 from dataset import ConveyorSimulator
 from metrics import AccuracyMetric, MeanAveragePrecisionMetric, SegmentationIntersectionOverUnionMetric
 from models.classification_network import AlexNet
@@ -49,7 +49,7 @@ class ConveyorCnnTrainer():
         if task == 'classification':
             return AlexNet(input_channels=1, nb_classes=3)
         elif task == 'detection':
-            return YOLO(input_channels=1)
+            return RCNN(input_channels=1)
         elif task == 'segmentation':
             return UNet(input_channels=1, nb_classes=3)
         else:
@@ -59,7 +59,7 @@ class ConveyorCnnTrainer():
         if task == 'classification':
             return torch.nn.BCELoss()
         elif task == 'detection':
-            return torch.nn.BCELoss(), torch.nn.MSELoss()
+            return torch.nn.BCELoss(), torch.nn.MSELoss(), torch.nn.CrossEntropyLoss()
         elif task == 'segmentation':
             return torch.nn.BCELoss()
 
@@ -133,7 +133,7 @@ class ConveyorCnnTrainer():
         print('Training data : ', len(dataset_train))
         print('Validation data : ', len(dataset_validation))
 
-        optimizer = optim.Adam(self._model.parameters(), lr=self._args.lr)
+        optimizer = optim.Adam(self._model.parameters(), lr=self._args.lr, weight_decay=1e-5)
         train_metric = self._create_metric(self._args.task)
         validation_metric = self._create_metric(self._args.task)
 
@@ -197,7 +197,7 @@ class ConveyorCnnTrainer():
                 validation_loss, validation_metric.get_name(), validation_metric_value))
 
             prediction = self._model(image)
-            visualizer.show_prediction(image[0], prediction[0], masks[0], boxes[0], labels[0])
+            visualizer.show_prediction(image[1], prediction[1], masks[1], boxes[1], labels[1])
             visualizer.show_learning_curves(epochs_train_losses, epochs_validation_losses,
                                             epochs_train_metrics, epochs_validation_metrics,
                                             train_metric.get_name())
@@ -256,28 +256,39 @@ class ConveyorCnnTrainer():
             return loss
 
         elif task == 'detection':
+            N, M, _ = boxes.shape
+
             optimizer.zero_grad()
             output = model(image)
 
-            # Séparer les données de output à des fins de calcul du coût
-            pred_x = output[:, 0::6, :, :]
-            pred_y = output[:, 1::6, :, :]
-            pred_w = output[:, 2::6, :, :]
-            pred_h = output[:, 3::6, :, :]
-            pred_conf = output[:, 4::6, :, :]
-            pred_class = output[:, 5::6, :, :]
-
-            # Séparer les targets
+            metric.accumulate(output, boxes)
 
 
-            sqrt_wh = torch.sqrt(output[:, 2:3, :, :])
+            # Séparer le output
+            pred_conf = output[..., 0]
+            pred_boxes = output[..., 1:4]
+            pred_class = output[..., 4:]
 
-            # Lxywh = criterion[1](output[:, 1:2, :, :]
+            # Séparer le target
+            target_boxes = boxes[..., 1:4]
+            target_mask_obj = boxes[..., 0] == 1
+            target_class = boxes[:, :, 4].long()
+            target_conf = boxes[:, :, 0]
+            mask_obj = boxes[..., 0] > 0  # Shape N, 3
+            target_class_onehot = torch.nn.functional.one_hot(target_class.to(torch.int64), num_classes=3)
 
-            # metric.accumulate()
+            # Fonction de coût pour les boxes (MSE)
+            Lbox = criterion[1](pred_boxes[mask_obj], target_boxes[mask_obj])
+            Lclass = criterion[0](pred_class, target_class_onehot.float())
+            Lconf = criterion[0](pred_conf, target_conf)
 
+            #
+            L_total = Lbox + Lclass + Lconf
+            L_total.backward()
+            optimizer.step()
 
-            raise NotImplementedError()
+            return L_total
+
 
         elif task == 'segmentation':
             optimizer.zero_grad()
@@ -340,7 +351,37 @@ class ConveyorCnnTrainer():
             metric.accumulate(output, class_labels)
             return criterion(output, class_labels)
         elif task == 'detection':
-            raise NotImplementedError()
+            N, M, _ = boxes.shape
+
+            output = model(image)
+
+            metric.accumulate(output, boxes)
+
+            # Séparer le output
+            pred_conf = output[..., 0]
+            pred_boxes = output[..., 1:4]
+            pred_class = output[..., 4:]
+
+            # Séparer le target
+            target_boxes = boxes[..., 1:4]
+            target_mask_obj = boxes[..., 0] == 1
+            # target_boxes = target_boxes * target_mask_obj.unsqueeze(-1).float()
+            target_class = boxes[:, :, 4].long()
+            target_conf = boxes[:, :, 0]
+            mask_obj = boxes[..., 0] > 0  # Shape N, 3
+            target_class_onehot = torch.nn.functional.one_hot(target_class.to(torch.int64), num_classes=3)
+
+            # Fonction de coût pour les boxes (MSE)
+            Lbox = criterion[1](pred_boxes[mask_obj], target_boxes[mask_obj])
+            Lclass = criterion[0](pred_class, target_class_onehot.float())
+            Lconf = criterion[0](pred_conf, target_conf)
+
+            # Fonction de coût totale
+            L_total = Lbox + Lclass + Lconf
+
+
+            return L_total
+
         elif task == 'segmentation':
             output = model(image)
 
@@ -359,9 +400,9 @@ if __name__ == '__main__':
     parser.add_argument('--mode', choices=['train', 'test'], help='The script mode', required=True)
     parser.add_argument('--task', choices=['classification', 'detection', 'segmentation'],
                         help='The CNN task', required=True)
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training and testing (default: 32)')
+    parser.add_argument('--batch_size', type=int, default=68, help='Batch size for training and testing (default: 32)')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs for training (default: 20)')
-    parser.add_argument('--lr', type=float, default=4e-4, help='learning rate used for training (default: 4e-4)')
+    parser.add_argument('--lr', type=float, default=5e-4, help='learning rate used for training (default: 4e-4)')
     parser.add_argument('--use_gpu', action='store_true', help='use the gpu instead of the cpu')
     parser.add_argument('--early_stop', type=int, default=25,
                         help='number of worse validation loss before quitting training (default: 25)')
