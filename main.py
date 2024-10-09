@@ -51,7 +51,6 @@ class ConveyorCnnTrainer():
         elif task == 'detection':
             return RCNN(input_channels=1)
         elif task == 'segmentation':
-            return UNet(input_channels=1, nb_classes=3)
         else:
             raise ValueError('Not supported task')
 
